@@ -1,0 +1,13 @@
+#!/bin/bash
+# Script to instantiate chaincode
+cp $FABRIC_CFG_PATH/core.yaml /vars/core.yaml
+cd /vars
+export FABRIC_CFG_PATH=/vars
+
+{% include "envsetting.j2" %}
+
+peer channel fetch config config_block.pb -o $ORDERER_ADDRESS \
+  --cafile $ORDERER_TLS_CA --tls -c {{CHANNEL_NAME}}
+
+configtxlator proto_decode --input config_block.pb --type common.Block \
+  | jq .data.data[0].payload.data.config > {{ CHANNEL_NAME }}_config.json

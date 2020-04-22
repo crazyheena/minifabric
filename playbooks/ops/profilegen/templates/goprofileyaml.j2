@@ -1,0 +1,121 @@
+---
+"name": "fabric-network"
+"x-type": "hlfv1"
+"version": "1.0.0"
+"client":
+{% set gopeer=allpeers|random %}
+  "organization": "{{ gopeer.org }}"
+  "cryptoconfig":
+    "path": "/keyfiles"
+  "connection":
+    "timeout":
+      "peer":
+        "endorser": "300"
+        "eventHub": "300"
+        "eventReg": "300"
+      "orderer": "300"
+  "credentialStore":
+    "path": "/tmp/state-store"
+    "cryptoStore":
+      "path": "/tmp/msp"
+  "BCCSP":
+    "security":
+      "enabled": "true"
+      "default":
+        "provider": "SW"
+      "hashAlgorithm": "SHA2"
+      "softVerify": "true"
+      "level": "256"
+
+"channels":
+  "{{ CHANNEL_NAME }}":
+    "orderers":
+{% for orderer in allorderers %}
+    - "{{ orderer.fullname }}"
+{% endfor %}
+    "peers":
+{% for peer in allpeers %}
+      "{{ peer.fullname }}":
+        "endorsingPeer": true
+        "chaincodeQuery": true
+        "eventSource": true
+{% endfor %}
+
+"organizations":
+{% for org in allorgs %}
+{%  set orgelements = allkeys.values() | selectattr('org', 'equalto', org) | list %}
+  "{{ org }}":
+    "mspid": "{{ org.split('.')|join('') }}"
+    "cryptoPath": "{{ org }}/users/{username}@{{ org}}/msp"
+    "peers":
+{%   for peer in allpeers|selectattr('org', 'equalto', org)|list %}
+    - "{{ peer.fullname }}"
+{%   endfor %}
+    "orderers":
+{%   for orderer in allorderers|selectattr('org', 'equalto', org)|list %}
+    - "{{ orderer.fullname }}"
+{%   endfor %}
+    "certificateAuthorities":
+{%   for ca in allcas|selectattr('org', 'equalto', org)|list %}
+    - "{{ ca.fullname }}"
+{%   endfor %}
+{% endfor %}
+
+"orderers":
+{% for orderer in allorderers %}
+  "{{ orderer.fullname }}":
+    "url": "{{ orderer.url }}:{{ orderer.port }}"
+    "grpcOptions":
+      "ssl-target-name-override": "{{ orderer.fullname }}"
+    "tlsCACerts":
+      "path": "/keyfiles/ordererOrganizations/{{ orderer.org }}/orderers/{{ orderer.fullname }}/tls/ca.crt"
+{% endfor %}
+
+"peers":
+{% for peer in allpeers %}
+  "{{ peer.fullname }}":
+    "url": "{{ peer.url }}:{{ peer.port }}"
+    "grpcOptions":
+      "ssl-target-name-override": "{{ peer.fullname }}"
+    "tlsCACerts":
+      "path": "/keyfiles/peerOrganizations/{{ peer.org }}/peers/{{ peer.fullname }}/tls/ca.crt"
+{% endfor %}
+
+"certificateAuthorities":
+{% for ca in allcas %}
+  "{{ ca.fullname }}":
+    "url": "https://{{ ca.url }}:{{ ca.port }}"
+    "tlsCACerts":
+      "path": "/keyfiles/{{ orgattrs[ca.org].certpath }}/{{ ca.org }}/ca/{{ ca.fullname }}-cert.pem"
+    "httpOptions":
+      "verify": "false"
+    "caName": "{{ ca.name }}"
+    "registrar":
+      "enrollId": "admin"
+      "enrollSecret": "adminpw"
+{% endfor %}
+
+"entityMatchers":
+  "orderer":
+{% for orderer in allorderers %}
+  - "mappedHost": "{{ orderer.fullname }}"
+    "pattern": "(\\w*){{ orderer.fullname }}(\\w*)"
+    "sslTargetOverrideUrlSubstitutionExp": "{{ orderer.fullname }}"
+    "urlSubstitutionExp": "{{ orderer.url }}:{{ orderer.port }}"
+{% endfor %}
+  
+  "peer":
+{% for peer in allpeers %}
+  - "mappedHost": "{{ peer.fullname }}"
+    "pattern": "(\\w*){{ peer.fullname }}(\\w*)"
+    "sslTargetOverrideUrlSubstitutionExp": "{{ peer.fullname }}"
+    "urlSubstitutionExp": "{{ peer.url }}:{{ peer.port }}"
+{% endfor %}
+  
+  "certificateAuthorities":
+{% for ca in allcas %}
+  - "mappedHost": "{{ ca.fullname }}"
+    "pattern": "(\\w*){{ ca.fullname }}(\\w*)"
+    "sslTargetOverrideUrlSubstitutionExp": "{{ ca.fullname }}"
+    "urlSubstitutionExp": "{{ ca.url }}:{{ ca.port }}"
+{% endfor %}

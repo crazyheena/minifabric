@@ -1,0 +1,49 @@
+---
+- name: Initialize the success flag
+  set_fact:
+    status_flag: "Success"
+
+- name: "Select an orderer node"
+  include_tasks: "{{ pjroot }}/playbooks/common/ordererselection.yaml"
+
+- name: Select a peer for chaincode invoke preparation
+  set_fact:
+    actingpeer: "{{ allpeers|selectattr('org','equalto',CURRENT_ORG)|list|random }}"
+    isuffix: "{{ (fabric.release is version('2.0', '>='))|ternary('2', '')}}"
+    endorsers: "{{ [] }}"
+
+- name: Check if endorser file exists
+  stat:
+    path: "{{ pjroot }}/vars/discover/{{ CHANNEL_NAME }}/{{ CC_NAME }}_endorsers.json"
+  register: endorserflag
+
+- name: Creating endorser list
+  when: endorserflag.stat.exists == true and endorserflag.stat.size > 2
+  block:
+  - name: load the endorser configuration file
+    include_vars: "{{ pjroot }}/vars/discover/{{ CHANNEL_NAME }}/{{ CC_NAME }}_endorsers.json"
+  - name: Select a random layout to use as endorsers
+    set_fact:
+      layout: "{{ Layouts|random }}"
+  - name: Select the list of the endorsers
+    set_fact:
+      endorsers: >-
+        {{ endorsers + EndorsersByGroups[item.key][0:(item.value|int)] }}  
+    with_items: "{{ layout.quantities_by_group|default({})|dict2items }}"
+
+- name: Create chaincode invocation script
+  template:
+    src: "{{ pjroot }}/playbooks/ops/templates/ccinvoke.j2"
+    dest: "{{ pjroot }}/vars/run/ccinvoke.sh"
+    mode: +x
+
+- name: Run the chaincode invoke script on cli container
+  command: >-
+    docker exec cli /vars/run/ccinvoke.sh
+  register: theresult
+
+- name: "Chaincode invocation results"
+  debug:
+    msg: "{{ theresult.stderr_lines }}"
+  tags: [print_action]
+
