@@ -1,0 +1,26 @@
+# Dockerfile for hyperledger minifabric
+#
+# @see https://github.com/litong01/minifabric
+#
+FROM alpine/git AS BUILD
+
+RUN cd /tmp && git init minifabric && cd minifabric                && \
+    git remote add origin https://github.com/litong01/minifabric   && \
+    git pull --depth=1 origin master && mv plugins /tmp            && \
+    rm -f .dockerignore .gitignore Dockerfile DockerfileHub 
+
+FROM alpine:latest
+
+LABEL maintainer="litong01@us.ibm.com"
+
+ENV PYTHONUNBUFFERED=1
+
+RUN apk add --no-cache bash ansible docker-cli  openssl xxd && \
+    if [ ! -e /usr/bin/python ]; then ln -sf python3 /usr/bin/python ; fi && \
+    wget -q https://raw.githubusercontent.com/dlitz/pycrypto/master/lib/Crypto/Random/Fortuna/FortunaGenerator.py \
+    -O /usr/lib/python3.8/site-packages/Crypto/Random/Fortuna/FortunaGenerator.py
+
+COPY --from=build /tmp/minifabric /home
+COPY --from=build /tmp/plugins /usr/lib/python3.8/site-packages/ansible/plugins
+ENV PATH $PATH:/home/bin
+WORKDIR /home
